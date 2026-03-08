@@ -5,7 +5,7 @@
 [![GitHub release](https://img.shields.io/github/v/release/bloom-perf/hikaku?style=flat)](https://github.com/Bloom-Perf/hikaku/releases)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat)](https://opensource.org/licenses/Apache-2.0)
 
-**Hikaku** (比較, "comparison" in Japanese) is a lightweight, zero-dependency metrics analysis library for [Kyara](https://github.com/Bloom-Perf/kyara) load testing. It reads Prometheus metrics directly from the [prom-client](https://github.com/siimon/prom-client) registry, computes structured snapshots, and detects performance regressions by comparing against JSON baselines.
+**Hikaku** (比較, "comparison" in Japanese) is a lightweight metrics analysis library for [Kyara](https://github.com/Bloom-Perf/kyara) load testing. It reads Prometheus metrics directly from the [prom-client](https://github.com/siimon/prom-client) registry, computes structured snapshots, detects performance regressions by comparing against JSON baselines, and optionally generates **natural language reports via LLM**.
 
 ## Table of Contents
 
@@ -16,6 +16,7 @@
 - [API Reference](#api-reference)
 - [Baseline Format](#baseline-format)
 - [Thresholds Configuration](#thresholds-configuration)
+- [LLM Reporting](#llm-reporting)
 - [Design Decisions](#design-decisions)
 - [Contributing](#contributing)
 - [License](#license)
@@ -75,6 +76,14 @@ Hikaku takes a different path: **read metrics in-memory, compare against a file*
                         │ ComparisonReport │
                         │   verdict: pass  │
                         │   or fail        │
+                        └──────────────────┘
+                                  │
+                        generateReport(report, ...)
+                                  │
+                                  ▼
+                        ┌──────────────────┐
+                        │  LLM Report      │
+                        │  (optional)      │
                         └──────────────────┘
 ```
 
@@ -163,6 +172,26 @@ Compares a current `RunSnapshot` against a `Baseline` and returns a detailed rep
 - The overall verdict is **fail** if any scenario fails
 - New scenarios (present in current but absent from baseline) are **skipped**
 
+### `generateReport(report, current, baseline, options): Promise<string>`
+
+Generates a natural language performance report from a `ComparisonReport` using an LLM provider.
+
+**Options:**
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `provider` | `LlmProvider` | *(required)* | LLM backend to use |
+| `locale` | `'en' \| 'fr'` | `'en'` | Report language |
+| `format` | `'markdown' \| 'text'` | `'markdown'` | Output format |
+| `includeRecommendations` | `boolean` | `true` | Include investigation suggestions |
+
+### `createAnthropicProvider(apiKey, model?): LlmProvider`
+
+Creates an LLM provider using the Anthropic SDK. Requires `@anthropic-ai/sdk` as a peer dependency.
+
+- `apiKey` — Anthropic API key
+- `model` — Model name (default: `claude-sonnet-4-20250514`)
+
 ### `histogramQuantile(quantile, buckets): number`
 
 Low-level utility: computes a quantile from histogram buckets using linear interpolation, matching the Prometheus `histogram_quantile()` algorithm.
@@ -228,6 +257,49 @@ const report = compare(snapshot, baseline, {
 
 Per-scenario overrides use the key format `"scenarioName:iteration"`.
 
+## LLM Reporting
+
+Hikaku can generate human-readable performance reports using an LLM. This is optional and requires `@anthropic-ai/sdk` as a peer dependency (or a custom `LlmProvider`).
+
+```bash
+npm install @anthropic-ai/sdk
+```
+
+### Using the built-in Anthropic provider
+
+```typescript
+import { compare, generateReport, createAnthropicProvider } from '@bloom-perf/hikaku';
+
+const report = compare(snapshot, baseline);
+
+if (report.overallVerdict === 'fail') {
+  const provider = createAnthropicProvider(process.env.ANTHROPIC_API_KEY!);
+  const analysis = await generateReport(report, snapshot, baseline, {
+    provider,
+    locale: 'fr',
+    format: 'markdown',
+  });
+  console.log(analysis);
+}
+```
+
+### Using a custom LLM provider
+
+Implement the `LlmProvider` interface to use any LLM backend:
+
+```typescript
+import type { LlmProvider } from '@bloom-perf/hikaku';
+
+const myProvider: LlmProvider = {
+  async complete(systemPrompt, userMessage) {
+    // Call your preferred LLM API here
+    return await myLlmClient.chat(systemPrompt, userMessage);
+  },
+};
+
+const analysis = await generateReport(report, snapshot, baseline, { provider: myProvider });
+```
+
 ## Design Decisions
 
 | Decision | Rationale |
@@ -237,6 +309,8 @@ Per-scenario overrides use the key format `"scenarioName:iteration"`.
 | **Same `histogram_quantile` algorithm** | Percentiles computed from bucket boundaries using linear interpolation, identical to Prometheus. Results are directly comparable to Grafana dashboards. |
 | **Match by `scenario:iteration`** | Leverages the labels added to Kyara's metrics in v2.0.0, enabling per-scenario regression detection without high-cardinality `run_id` labels. |
 | **Stateless comparison** | No database, no time-series storage. Each comparison is a pure function: `(current, baseline) → report`. |
+| **Injectable LLM provider** | `LlmProvider` interface allows using any LLM backend. Anthropic SDK provided as a convenience, but not a hard dependency (optional peer dep + dynamic import). |
+| **LLM only on demand** | Report generation is opt-in: no API calls unless explicitly requested. Keeps the core library fast and free. |
 
 ## Bloom-Perf Ecosystem
 

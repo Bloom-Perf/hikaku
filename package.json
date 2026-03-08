@@ -1,6 +1,6 @@
 {
   "name": "@bloom-perf/hikaku",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Lightweight Prometheus metrics analysis and regression detection for Kyara load testing",
   "type": "module",
   "main": "dist/index.js",
@@ -9,9 +9,16 @@
     "dist"
   ],
   "peerDependencies": {
+    "@anthropic-ai/sdk": ">=0.30.0",
     "prom-client": "^15.0.0"
   },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/sdk": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
     "@types/chai": "5.2.3",
     "@types/mocha": "10.0.10",
     "c8": "11.0.0",
@@ -45,7 +52,9 @@
     "baseline",
     "regression",
     "load-testing",
-    "performance"
+    "performance",
+    "llm",
+    "report"
   ],
   "author": "Bloom-perf",
   "license": "Apache-2.0",

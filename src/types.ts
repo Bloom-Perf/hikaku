@@ -1,103 +1,122 @@
 // ============ Snapshot types ============
 
 export type PercentileValues = {
-    p50: number
-    p75: number
-    p90: number
-    p95: number
-    p99: number
-}
+  p50: number;
+  p75: number;
+  p90: number;
+  p95: number;
+  p99: number;
+};
 
 export type HostMetrics = {
-    hostname: string
-    requestCount: number
-    requestFinishedCount: number
-    requestFailedCount: number
-    responseCount: number
-    durationPercentiles: PercentileValues
-    durationSum: number
-    durationCount: number
-}
+  hostname: string;
+  requestCount: number;
+  requestFinishedCount: number;
+  requestFailedCount: number;
+  responseCount: number;
+  durationPercentiles: PercentileValues;
+  durationSum: number;
+  durationCount: number;
+};
 
 export type ScenarioMetrics = {
-    scenario: string
-    iteration: number
-    hosts: HostMetrics[]
-    totalRequests: number
-    totalRequestsFailed: number
-    errorRate: number
-    aggregatedDurationPercentiles: PercentileValues
-}
+  scenario: string;
+  iteration: number;
+  hosts: HostMetrics[];
+  totalRequests: number;
+  totalRequestsFailed: number;
+  errorRate: number;
+  aggregatedDurationPercentiles: PercentileValues;
+};
 
 export type ResourceMetrics = {
-    browser: string
-    tabCpuPercentiles: PercentileValues
-    tabRamKbPercentiles: PercentileValues
-    podCpuPercentiles: PercentileValues
-    podRamKbPercentiles: PercentileValues
-}
+  browser: string;
+  tabCpuPercentiles: PercentileValues;
+  tabRamKbPercentiles: PercentileValues;
+  podCpuPercentiles: PercentileValues;
+  podRamKbPercentiles: PercentileValues;
+};
 
 export type RunSnapshot = {
-    timestamp: string
-    scenarios: ScenarioMetrics[]
-    resources: ResourceMetrics[]
-}
+  timestamp: string;
+  scenarios: ScenarioMetrics[];
+  resources: ResourceMetrics[];
+};
 
 // ============ Baseline types ============
 
 export type Baseline = {
-    version: 1
-    createdAt: string
-    snapshot: RunSnapshot
-}
+  version: 1;
+  createdAt: string;
+  snapshot: RunSnapshot;
+};
 
 // ============ Comparison types ============
 
-export type MetricStatus = 'ok' | 'regression' | 'improvement'
+export type MetricStatus = "ok" | "regression" | "improvement";
 
 export type MetricDelta = {
-    metricName: string
-    baselineValue: number
-    currentValue: number
-    deltaPercent: number
-    status: MetricStatus
-}
+  metricName: string;
+  baselineValue: number;
+  currentValue: number;
+  deltaPercent: number;
+  status: MetricStatus;
+};
 
 export type ScenarioComparison = {
-    scenario: string
-    iteration: number
-    deltas: MetricDelta[]
-    verdict: 'pass' | 'fail'
-}
+  scenario: string;
+  iteration: number;
+  deltas: MetricDelta[];
+  verdict: "pass" | "fail";
+};
 
 export type ComparisonReport = {
-    timestamp: string
-    overallVerdict: 'pass' | 'fail'
-    scenarios: ScenarioComparison[]
-    summary: {
-        totalScenarios: number
-        passed: number
-        failed: number
-        regressions: MetricDelta[]
-    }
-}
+  timestamp: string;
+  overallVerdict: "pass" | "fail";
+  scenarios: ScenarioComparison[];
+  summary: {
+    totalScenarios: number;
+    passed: number;
+    failed: number;
+    regressions: MetricDelta[];
+  };
+};
 
 export type ComparisonThresholds = {
-    /** Max allowed increase in percent for p95 latency. Default: 20 */
-    defaultMaxIncreasePercent: number
-    /** Max allowed increase in percent for error rate. Default: 10 */
-    defaultMaxErrorRateIncreasePercent: number
-    /** Per-scenario overrides keyed by "scenario:iteration" */
-    perScenario?: Record<
-        string,
-        {
-            maxIncreasePercent?: number
-            maxErrorRateIncreasePercent?: number
-        }
-    >
-}
+  /** Max allowed increase in percent for p95 latency. Default: 20 */
+  defaultMaxIncreasePercent: number;
+  /** Max allowed increase in percent for error rate. Default: 10 */
+  defaultMaxErrorRateIncreasePercent: number;
+  /** Per-scenario overrides keyed by "scenario:iteration" */
+  perScenario?: Record<
+    string,
+    {
+      maxIncreasePercent?: number;
+      maxErrorRateIncreasePercent?: number;
+    }
+  >;
+};
 
 export const DEFAULT_THRESHOLDS: ComparisonThresholds = {
-    defaultMaxIncreasePercent: 20,
-    defaultMaxErrorRateIncreasePercent: 10,
-}
+  defaultMaxIncreasePercent: 20,
+  defaultMaxErrorRateIncreasePercent: 10,
+};
+
+// ============ LLM Report types ============
+
+/** Generic LLM provider interface — implement this to use any LLM backend */
+export type LlmProvider = {
+  complete(systemPrompt: string, userMessage: string): Promise<string>;
+};
+
+/** Options for generateReport */
+export type ReportOptions = {
+  /** LLM provider to use for generating the report */
+  provider: LlmProvider;
+  /** Report language. Default: 'en' */
+  locale?: "en" | "fr";
+  /** Output format. Default: 'markdown' */
+  format?: "markdown" | "text";
+  /** Include investigation recommendations. Default: true */
+  includeRecommendations?: boolean;
+};
