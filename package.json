@@ -1,0 +1,56 @@
+{
+  "name": "@bloom-perf/hikaku",
+  "version": "0.1.0",
+  "description": "Lightweight Prometheus metrics analysis and regression detection for Kyara load testing",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "peerDependencies": {
+    "prom-client": "^15.0.0"
+  },
+  "devDependencies": {
+    "@types/chai": "5.2.3",
+    "@types/mocha": "10.0.10",
+    "c8": "11.0.0",
+    "chai": "6.2.2",
+    "esbuild": "0.27.3",
+    "esbuild-node-externals": "1.20.1",
+    "mocha": "11.7.5",
+    "prettier": "3.8.1",
+    "prom-client": "15.0.0",
+    "ts-node": "10.9.2",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "build": "rm -rf dist && node esbuild.js && tsc -p tsconfig.build.json",
+    "test": "mocha",
+    "test:coverage": "c8 npm run test",
+    "format": "prettier --write src/ test/",
+    "format:check": "prettier --check src/ test/"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Bloom-Perf/hikaku.git"
+  },
+  "keywords": [
+    "prometheus",
+    "metrics",
+    "baseline",
+    "regression",
+    "load-testing",
+    "performance"
+  ],
+  "author": "Bloom-perf",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/Bloom-Perf/hikaku/issues"
+  },
+  "homepage": "https://www.npmjs.com/package/@bloom-perf/hikaku"
+}
