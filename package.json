@@ -1,6 +1,6 @@
 {
   "name": "@bloom-perf/hikaku",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Lightweight Prometheus metrics analysis and regression detection for Kyara load testing",
   "type": "module",
   "main": "dist/index.js",
