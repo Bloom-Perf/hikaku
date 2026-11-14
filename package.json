@@ -12,8 +12,7 @@
     "node": ">=22"
   },
   "peerDependencies": {
-    "@anthropic-ai/sdk": ">=0.30.0",
-    "prom-client": "^15.0.0"
+    "@anthropic-ai/sdk": ">=0.30.0"
   },
   "peerDependenciesMeta": {
     "@anthropic-ai/sdk": {
@@ -22,6 +21,7 @@
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "1.8.0",
+    "@prometheus-io/client": "0.16.1",
     "@types/chai": "5.2.3",
     "@types/mocha": "10.0.10",
     "@types/node": "22.20.5",
@@ -31,7 +31,6 @@
     "esbuild-node-externals": "2.0.0",
     "mocha": "12.0.3",
     "prettier": "3.10.1",
-    "prom-client": "15.1.3",
     "tsx": "4.23.15",
     "typescript": "7.0.2"
   },

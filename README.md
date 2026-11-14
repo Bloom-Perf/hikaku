@@ -5,7 +5,7 @@
 [![GitHub release](https://img.shields.io/github/v/release/bloom-perf/hikaku?style=flat)](https://github.com/Bloom-Perf/hikaku/releases)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat)](https://opensource.org/licenses/Apache-2.0)
 
-**Hikaku** (比較, "comparison" in Japanese) is a lightweight metrics analysis library for [Kyara](https://github.com/Bloom-Perf/kyara) load testing. It reads Prometheus metrics directly from the [prom-client](https://github.com/siimon/prom-client) registry, computes structured snapshots, detects performance regressions by comparing against JSON baselines, and optionally generates **natural language reports via LLM**.
+**Hikaku** (比較, "comparison" in Japanese) is a lightweight metrics analysis library for [Kyara](https://github.com/Bloom-Perf/kyara) load testing. It reads Prometheus metrics directly from the [`@prometheus-io/client`](https://www.npmjs.com/package/@prometheus-io/client) registry (formerly `prom-client`), computes structured snapshots, detects performance regressions by comparing against JSON baselines, and optionally generates **natural language reports via LLM**.
 
 ## Table of Contents
 
@@ -46,7 +46,7 @@ Existing tools like Keptn (quality gates) and Iter8 (SLO validation) require Kub
 Hikaku takes a different path: **read metrics in-memory, compare against a file**.
 
 - **Zero infrastructure** — no Prometheus server, no Kubernetes, no operator
-- **In-process** — reads directly from `prom-client`'s `Registry`, no HTTP scraping
+- **In-process** — reads directly from the Prometheus client's `Registry`, no HTTP scraping
 - **File-based baselines** — a JSON snapshot stored in git or as a CI artifact
 - **Run-to-run semantics** — each baseline is a discrete snapshot, no timestamp bookkeeping
 - **Same math as Prometheus** — percentiles use identical linear interpolation (`histogram_quantile`)
@@ -57,7 +57,7 @@ Hikaku takes a different path: **read metrics in-memory, compare against a file*
                           Kyara load test run
                                   │
                                   ▼
-                     prom-client Registry (in-memory)
+                  Prometheus Registry (in-memory)
                                   │
                         createSnapshot(registry)
                                   │
@@ -97,13 +97,13 @@ Hikaku takes a different path: **read metrics in-memory, compare against a file*
 npm install @bloom-perf/hikaku
 ```
 
-`prom-client` is a **peer dependency** — it must be installed separately (Kyara already includes it).
+Hikaku has no runtime dependency. It reads any registry with a `getMetricsAsJSON()` method: [`@prometheus-io/client`](https://www.npmjs.com/package/@prometheus-io/client), or `prom-client` 15 (its former name, deprecated). Requires Node.js 22 or later.
 
 ## Quick Start
 
 ```typescript
 import { createSnapshot, saveBaseline, loadBaseline, baselineExists, compare } from '@bloom-perf/hikaku';
-import { Registry } from 'prom-client';
+import { Registry } from '@prometheus-io/client';
 
 // After your Kyara load test completes...
 const registry: Registry = getYourPromRegistry();
@@ -126,8 +126,12 @@ if (!baselineExists(baselinePath)) {
   console.log(`Scenarios: ${report.summary.passed} passed, ${report.summary.failed} failed`);
 
   if (report.overallVerdict === 'fail') {
-    for (const regression of report.summary.regressions) {
-      console.log(`  ⚠ ${regression.metricName}: ${regression.deltaPercent.toFixed(1)}% increase`);
+    for (const r of report.summary.regressions) {
+      const where = r.browser ?? `${r.scenario} #${r.iteration}`;
+      console.log(`  ⚠ ${where}: ${r.metricName} +${r.deltaPercent.toFixed(1)}%`);
+    }
+    for (const m of report.summary.missingScenarios) {
+      console.log(`  ⚠ ${m.scenario} #${m.iteration} did not run`);
     }
     process.exit(1);
   }
@@ -138,11 +142,11 @@ if (!baselineExists(baselinePath)) {
 
 ### `createSnapshot(registry): Promise<RunSnapshot>`
 
-Reads all metrics from a `prom-client` Registry and produces a structured `RunSnapshot`.
+Reads all metrics from a registry (`@prometheus-io/client`, `prom-client` 15, or any `MetricsSource`: an object with `getMetricsAsJSON()`) and produces a structured `RunSnapshot`.
 
 - Extracts counters grouped by `(scenario, iteration, hostname)`
 - Computes p50/p75/p90/p95/p99 percentiles from histogram buckets
-- Groups resource metrics (CPU, RAM) by browser
+- Groups resource metrics (CPU, RAM) by browser (`dsd_tab_*` per tab, `dsd_pod_*` for the whole browser). A percentile without any sample is `NaN` (`null` once saved)
 
 ### `saveBaseline(snapshot, filePath): void`
 
@@ -160,17 +164,26 @@ Returns `true` if a baseline file exists at the given path.
 
 Compares a current `RunSnapshot` against a `Baseline` and returns a detailed report.
 
-**Matching:** Scenarios are matched by composite key `"scenario:iteration"`.
+**Matching:** Scenarios are matched by composite key `"scenario:iteration"`, browsers by name.
 
-**Metrics compared:**
+**Metrics compared, per scenario iteration** (`report.scenarios`):
 - `p95_latency` — 95th percentile of request duration (aggregated across hosts)
 - `p50_latency` — 50th percentile of request duration
 - `error_rate` — ratio of failed requests to total requests
+- `total_requests` — informational, never fails
+
+**Metrics compared, per browser** (`report.resources`), when both runs measured it:
+- `p95_browser_cpu_percent`, `p95_browser_ram_kb` — the whole browser (all its processes)
+- `p95_tab_cpu_percent`, `p95_tab_ram_kb` — each process rendering pages
+
+A value the baseline or the current run does not know (no sample) is not compared.
 
 **Verdicts:**
-- A scenario **fails** if `p95_latency` or `p50_latency` increases beyond the threshold, or if `error_rate` increases beyond its threshold
-- The overall verdict is **fail** if any scenario fails
-- New scenarios (present in current but absent from baseline) are **skipped**
+- A scenario iteration **fails** if `p95_latency` or `p50_latency` increases beyond the threshold, or if `error_rate` increases beyond its threshold
+- A browser **fails** if one of its metrics increases beyond `defaultMaxResourceIncreasePercent`
+- The overall verdict is **fail** if a scenario iteration or a browser fails, or if scenario iterations of the baseline did not run (`summary.missingScenarios`): the runs are not comparable, update the baseline if the scenarios changed
+- New scenario iterations (`summary.newScenarios`) and browsers no longer measured (`summary.missingBrowsers`, e.g. a run on macOS, where Kyara does not measure the browsers) are listed, not compared
+- `summary.regressions` lists every regression with its `scenario` and `iteration`, or its `browser`
 
 ### `generateReport(report, current, baseline, options): Promise<string>`
 
@@ -190,7 +203,9 @@ Generates a natural language performance report from a `ComparisonReport` using 
 Creates an LLM provider using the Anthropic SDK. Requires `@anthropic-ai/sdk` as a peer dependency.
 
 - `apiKey` — Anthropic API key
-- `model` — Model name (default: `claude-sonnet-4-20250514`)
+- `model` — Model name (default: `DEFAULT_ANTHROPIC_MODEL`, `claude-sonnet-5-5`)
+
+The message is streamed (the snapshots can make a long input), with up to 16,000 output tokens: the model may think before writing. The provider rejects when the model declines or returns no text. The SDK reads `ANTHROPIC_BASE_URL` to reach a proxy or a gateway.
 
 ### `histogramQuantile(quantile, buckets): number`
 
@@ -240,7 +255,8 @@ Default thresholds:
 | Parameter | Default | Description |
 |---|---|---|
 | `defaultMaxIncreasePercent` | `20` | Max allowed percentage increase for p50/p95 latency |
-| `defaultMaxErrorRateIncreasePercent` | `10` | Max allowed percentage increase for error rate |
+| `defaultMaxErrorRateIncreasePercent` | `10` | Max allowed percentage increase for error rate (relative: 1% → 1.1% is +10%; from 0, any error fails) |
+| `defaultMaxResourceIncreasePercent` | `20` | Max allowed percentage increase for the p95 CPU and memory of each browser |
 
 Custom thresholds:
 
@@ -248,14 +264,15 @@ Custom thresholds:
 const report = compare(snapshot, baseline, {
   defaultMaxIncreasePercent: 15,        // Stricter: 15% max
   defaultMaxErrorRateIncreasePercent: 5, // Very strict on errors
+  defaultMaxResourceIncreasePercent: 30, // CPU and memory of the browsers
   perScenario: {
-    'Checkout:0': { maxIncreasePercent: 30 },  // More tolerant for checkout
-    'Login:0': { maxErrorRateIncreasePercent: 0 }, // Zero tolerance on login errors
+    Checkout: { maxIncreasePercent: 30 },  // More tolerant for all checkout iterations
+    'Login:0': { maxErrorRateIncreasePercent: 0 }, // Zero tolerance on the first login
   },
 });
 ```
 
-Per-scenario overrides use the key format `"scenarioName:iteration"`.
+Per-scenario overrides use the key `"scenarioName"` (all its iterations) or `"scenarioName:iteration"` (one iteration, wins over the former).
 
 ## LLM Reporting
 
@@ -304,7 +321,7 @@ const analysis = await generateReport(report, snapshot, baseline, { provider: my
 
 | Decision | Rationale |
 |---|---|
-| **prom-client as peer dependency** | Hikaku reads the registry in-memory — it must share the same instance as Kyara. No runtime dependencies. |
+| **No dependency on a Prometheus client** | Hikaku reads the registry in-memory, through its `getMetricsAsJSON()`: it works with the instance Kyara already has, whichever client version it uses. No runtime dependencies. |
 | **JSON baselines** | Human-readable, diffable in git, portable as CI artifacts. The `version` field enables future format evolution. |
 | **Same `histogram_quantile` algorithm** | Percentiles computed from bucket boundaries using linear interpolation, identical to Prometheus. Results are directly comparable to Grafana dashboards. |
 | **Match by `scenario:iteration`** | Leverages the labels added to Kyara's metrics in v2.0.0, enabling per-scenario regression detection without high-cardinality `run_id` labels. |
@@ -318,7 +335,7 @@ Hikaku is part of the [Bloom-Perf](https://github.com/Bloom-Perf) load testing e
 
 | Package | Role |
 |---|---|
-| [**kyara**](https://github.com/Bloom-Perf/kyara) | Load testing engine — Puppeteer + Firefox + YAML scenarios + Prometheus metrics |
+| [**kyara**](https://github.com/Bloom-Perf/kyara) | Load testing engine — Puppeteer + Chrome and Firefox + YAML scenarios + Prometheus metrics |
 | [**yaml-pptr**](https://github.com/Bloom-Perf/yaml-pptr) | YAML-to-Puppeteer scenario interpreter |
 | [**hikaku**](https://github.com/Bloom-Perf/hikaku) | Metrics analysis and regression detection |
 

@@ -1,3 +1,28 @@
+// ============ Metrics source ============
+
+/** One sample of a metric, as returned by `Registry#getMetricsAsJSON()` */
+export type MetricSample = {
+  value: number;
+  /** Set on the samples of a histogram: `<name>_bucket`, `<name>_sum`, `<name>_count` */
+  metricName?: string;
+  labels: Partial<Record<string, string | number>>;
+};
+
+/** One metric with its samples, as returned by `Registry#getMetricsAsJSON()` */
+export type MetricFamily = {
+  name: string;
+  values: MetricSample[];
+};
+
+/**
+ * Where the metrics are read from: a Prometheus registry of
+ * [`@prometheus-io/client`](https://www.npmjs.com/package/@prometheus-io/client)
+ * or of `prom-client` (its former name), or any object with the same `getMetricsAsJSON()`.
+ */
+export type MetricsSource = {
+  getMetricsAsJSON(): Promise<MetricFamily[]>;
+};
+
 // ============ Snapshot types ============
 
 export type PercentileValues = {
@@ -29,10 +54,16 @@ export type ScenarioMetrics = {
   aggregatedDurationPercentiles: PercentileValues;
 };
 
+/**
+ * CPU (% of one core) and memory (kB) of a browser, from Kyara's `dsd_*` histograms.
+ * A percentile is `NaN` (`null` once saved) when the metric has no sample for the browser.
+ */
 export type ResourceMetrics = {
   browser: string;
+  /** Each process rendering pages (tab) */
   tabCpuPercentiles: PercentileValues;
   tabRamKbPercentiles: PercentileValues;
+  /** The whole browser (all its processes) */
   podCpuPercentiles: PercentileValues;
   podRamKbPercentiles: PercentileValues;
 };
@@ -59,8 +90,18 @@ export type MetricDelta = {
   metricName: string;
   baselineValue: number;
   currentValue: number;
+  /** `Infinity` when the baseline value is 0 and the current one is not */
   deltaPercent: number;
   status: MetricStatus;
+};
+
+/** A regression, with the scenario or the browser it was found in */
+export type Regression = MetricDelta & {
+  /** Set for a scenario metric (latency, error rate) */
+  scenario?: string;
+  iteration?: number;
+  /** Set for a resource metric (CPU, memory) */
+  browser?: string;
 };
 
 export type ScenarioComparison = {
@@ -70,24 +111,49 @@ export type ScenarioComparison = {
   verdict: "pass" | "fail";
 };
 
+export type ResourceComparison = {
+  browser: string;
+  deltas: MetricDelta[];
+  verdict: "pass" | "fail";
+};
+
+export type ScenarioKey = {
+  scenario: string;
+  iteration: number;
+};
+
 export type ComparisonReport = {
   timestamp: string;
   overallVerdict: "pass" | "fail";
   scenarios: ScenarioComparison[];
+  /** Resource consumption of each browser measured in both runs */
+  resources: ResourceComparison[];
   summary: {
+    /** Scenario iterations compared */
     totalScenarios: number;
     passed: number;
     failed: number;
-    regressions: MetricDelta[];
+    regressions: Regression[];
+    /** In the baseline but not in the current run: the verdict is "fail" */
+    missingScenarios: ScenarioKey[];
+    /** In the current run but not in the baseline: not compared */
+    newScenarios: ScenarioKey[];
+    /** Browsers with resource metrics in the baseline but not in the current run: not compared */
+    missingBrowsers: string[];
   };
 };
 
 export type ComparisonThresholds = {
-  /** Max allowed increase in percent for p95 latency. Default: 20 */
+  /** Max allowed increase in percent for p50 and p95 latency. Default: 20 */
   defaultMaxIncreasePercent: number;
   /** Max allowed increase in percent for error rate. Default: 10 */
   defaultMaxErrorRateIncreasePercent: number;
-  /** Per-scenario overrides keyed by "scenario:iteration" */
+  /** Max allowed increase in percent for the p95 CPU and memory of the browsers. Default: 20 */
+  defaultMaxResourceIncreasePercent: number;
+  /**
+   * Per-scenario overrides keyed by "scenario:iteration" (one iteration) or "scenario"
+   * (all its iterations); "scenario:iteration" wins over "scenario"
+   */
   perScenario?: Record<
     string,
     {
@@ -100,6 +166,7 @@ export type ComparisonThresholds = {
 export const DEFAULT_THRESHOLDS: ComparisonThresholds = {
   defaultMaxIncreasePercent: 20,
   defaultMaxErrorRateIncreasePercent: 10,
+  defaultMaxResourceIncreasePercent: 20,
 };
 
 // ============ LLM Report types ============
