@@ -390,6 +390,10 @@ function makeResources(
     tabRamKbPercentiles: percentiles(ramKb / 4),
     podCpuPercentiles: percentiles(cpu),
     podRamKbPercentiles: percentiles(ramKb),
+    tabCpuMean: cpu / 4,
+    tabRamKbMean: ramKb / 8,
+    podCpuMean: cpu / 2,
+    podRamKbMean: ramKb / 2,
   };
 }
 
@@ -424,10 +428,10 @@ describe("compare resources", () => {
       "firefox",
     ]);
     expect(report.resources[0].deltas.map((d) => d.metricName)).to.deep.equal([
-      "p95_browser_cpu_percent",
-      "p95_browser_ram_kb",
-      "p95_tab_cpu_percent",
-      "p95_tab_ram_kb",
+      "mean_browser_cpu_percent",
+      "mean_browser_ram_kb",
+      "mean_tab_cpu_percent",
+      "mean_tab_ram_kb",
     ]);
   });
 
@@ -448,8 +452,8 @@ describe("compare resources", () => {
     expect(
       report.summary.regressions.map((r) => [r.browser, r.metricName]),
     ).to.deep.equal([
-      ["firefox", "p95_browser_ram_kb"],
-      ["firefox", "p95_tab_ram_kb"],
+      ["firefox", "mean_browser_ram_kb"],
+      ["firefox", "mean_tab_ram_kb"],
     ]);
   });
 
@@ -483,7 +487,7 @@ describe("compare resources", () => {
   it("skips a metric without samples (no tab measured)", () => {
     const baseline = makeBaseline([scenario]);
     const noTab = makeResources("chrome");
-    noTab.tabCpuPercentiles.p95 = NaN;
+    noTab.tabCpuMean = NaN;
     baseline.snapshot.resources = [noTab];
 
     const report = compare(
@@ -492,8 +496,43 @@ describe("compare resources", () => {
     );
 
     expect(report.resources[0].deltas.map((d) => d.metricName)).to.not.include(
-      "p95_tab_cpu_percent",
+      "mean_tab_cpu_percent",
     );
+    expect(report.overallVerdict).to.equal("pass");
+  });
+
+  it("compares the means, not the percentiles of the coarse buckets", () => {
+    const baseline = makeBaseline([scenario]);
+    baseline.snapshot.resources = [makeResources("firefox")];
+    // Same consumption, but the p95 moved to the next CPU bucket
+    const current = makeResources("firefox");
+    current.podCpuPercentiles.p95 *= 2;
+
+    const report = compare(
+      withResources(makeSnapshot([scenario]), [current]),
+      baseline,
+    );
+
+    expect(report.overallVerdict).to.equal("pass");
+  });
+
+  it("does not compare the means of a baseline saved by hikaku 0.2", () => {
+    const baseline = makeBaseline([scenario]);
+    const old: Partial<ResourceMetrics> = makeResources("firefox");
+    delete old.podCpuMean;
+    delete old.podRamKbMean;
+    delete old.tabCpuMean;
+    delete old.tabRamKbMean;
+    baseline.snapshot.resources = [old as ResourceMetrics];
+
+    const report = compare(
+      withResources(makeSnapshot([scenario]), [
+        makeResources("firefox", { cpu: 500 }),
+      ]),
+      baseline,
+    );
+
+    expect(report.resources[0].deltas).to.deep.equal([]);
     expect(report.overallVerdict).to.equal("pass");
   });
 });

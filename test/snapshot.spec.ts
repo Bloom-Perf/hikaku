@@ -347,8 +347,16 @@ describe("createSnapshot", () => {
       1024 * 1024,
     );
     expect(firefox.tabCpuPercentiles.p95).to.be.within(50, 75);
+    // Exact means, whatever the buckets
+    expect(firefox.podCpuMean).to.equal(120);
+    expect(firefox.podRamKbMean).to.equal(900_000);
+    expect(firefox.tabCpuMean).to.equal(60);
     // No tab sample for Chrome: unknown, not 0
     expect(chrome.tabCpuPercentiles.p95).to.be.NaN;
+    expect(chrome.tabCpuMean).to.be.NaN;
+    // A metric Kyara did not register at all: unknown too
+    expect(chrome.tabRamKbMean).to.be.NaN;
+    expect(chrome.tabRamKbPercentiles.p50).to.be.NaN;
   });
 
   it("accepts any source of metrics, with labels as strings", async () => {

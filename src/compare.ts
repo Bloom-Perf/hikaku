@@ -221,7 +221,7 @@ function compareScenario(
   };
 }
 
-/** Compares the p95 CPU and memory of each browser measured in both runs */
+/** Compares the mean CPU and memory of each browser measured in both runs */
 function compareResources(
   current: ResourceMetrics[],
   baseline: ResourceMetrics[],
@@ -237,29 +237,31 @@ function compareResources(
       missingBrowsers.push(base.browser);
       continue;
     }
+    // Means, not percentiles: the percentiles are interpolated within coarse buckets
+    // (e.g. 100-150-200 % of CPU), so they jump between runs that consume the same
     const deltas = [
       computeDelta(
-        "p95_browser_cpu_percent",
-        base.podCpuPercentiles?.p95,
-        cur.podCpuPercentiles?.p95,
+        "mean_browser_cpu_percent",
+        base.podCpuMean,
+        cur.podCpuMean,
         maxIncreasePercent,
       ),
       computeDelta(
-        "p95_browser_ram_kb",
-        base.podRamKbPercentiles?.p95,
-        cur.podRamKbPercentiles?.p95,
+        "mean_browser_ram_kb",
+        base.podRamKbMean,
+        cur.podRamKbMean,
         maxIncreasePercent,
       ),
       computeDelta(
-        "p95_tab_cpu_percent",
-        base.tabCpuPercentiles?.p95,
-        cur.tabCpuPercentiles?.p95,
+        "mean_tab_cpu_percent",
+        base.tabCpuMean,
+        cur.tabCpuMean,
         maxIncreasePercent,
       ),
       computeDelta(
-        "p95_tab_ram_kb",
-        base.tabRamKbPercentiles?.p95,
-        cur.tabRamKbPercentiles?.p95,
+        "mean_tab_ram_kb",
+        base.tabRamKbMean,
+        cur.tabRamKbMean,
         maxIncreasePercent,
       ),
     ].filter((d): d is MetricDelta => d !== undefined);
