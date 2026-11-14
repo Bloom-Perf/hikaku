@@ -1,21 +1,14 @@
 {
-  "include": [
-    "src/**/*",
-    "test/**/*"
-  ],
+  "include": ["src/**/*", "test/**/*"],
   "compilerOptions": {
-    "module": "esnext",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "target": "esnext",
-    "lib": [
-      "esnext"
-    ],
-    "declaration": true,
+    "lib": ["esnext"],
+    "types": ["node", "mocha"],
     "strict": true,
-    "moduleResolution": "node",
+    "isolatedModules": true,
     "skipLibCheck": true,
-    "esModuleInterop": true,
-    "emitDeclarationOnly": true,
-    "strictNullChecks": true,
-    "outDir": "dist"
+    "noEmit": true
   }
 }

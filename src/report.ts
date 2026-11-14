@@ -4,7 +4,7 @@ import type {
   Baseline,
   ReportOptions,
   LlmProvider,
-} from "./types";
+} from "./types.js";
 
 /**
  * Generate a natural language performance report from a ComparisonReport using an LLM.

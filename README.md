@@ -326,18 +326,14 @@ Hikaku is part of the [Bloom-Perf](https://github.com/Bloom-Perf) load testing e
 
 Contributions are welcome! Please open an issue or submit a pull request.
 
+Requires Node.js 22 or later.
+
 ```bash
-# Install dependencies
-npm install
-
-# Run tests
-npm test
-
-# Build
-npm run build
-
-# Format code
-npm run format
+npm install          # install dependencies
+npm test             # run the tests (mocha, TypeScript loaded through tsx)
+npm run typecheck    # type-check src and test
+npm run build        # bundle with esbuild and emit the declarations into dist/
+npm run format       # format with Prettier (CI runs npm run format:check)
 ```
 
 ## License

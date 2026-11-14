@@ -2,8 +2,8 @@ import { expect } from "chai";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { saveBaseline, loadBaseline, baselineExists } from "../src/baseline";
-import type { RunSnapshot } from "../src/types";
+import { saveBaseline, loadBaseline, baselineExists } from "../src/baseline.js";
+import type { RunSnapshot } from "../src/types.js";
 
 describe("baseline", () => {
   let tmpDir: string;

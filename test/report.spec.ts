@@ -1,12 +1,12 @@
 import { expect } from "chai";
-import { generateReport } from "../src/report";
+import { generateReport } from "../src/report.js";
 import type {
   ComparisonReport,
   RunSnapshot,
   Baseline,
   LlmProvider,
   ScenarioMetrics,
-} from "../src/types";
+} from "../src/types.js";
 
 function makeScenario(
   overrides: Partial<ScenarioMetrics> = {},

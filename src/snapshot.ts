@@ -5,7 +5,7 @@ import type {
   HostMetrics,
   ResourceMetrics,
   PercentileValues,
-} from "./types";
+} from "./types.js";
 
 // ============ Public API ============
 
