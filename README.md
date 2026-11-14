@@ -150,11 +150,11 @@ Reads all metrics from a registry (`@prometheus-io/client`, `prom-client` 15, or
 
 ### `saveBaseline(snapshot, filePath): void`
 
-Saves a `RunSnapshot` as a versioned JSON baseline file.
+Saves a `RunSnapshot` as a versioned JSON baseline file, creating its directory if needed.
 
 ### `loadBaseline(filePath): Baseline`
 
-Loads and validates a baseline file. Throws on missing file or unsupported version.
+Loads and validates a baseline file. Throws, naming the file, when it is missing, is not JSON, is not a baseline or has an unsupported version.
 
 ### `baselineExists(filePath): boolean`
 
