@@ -146,7 +146,7 @@ Reads all metrics from a registry (`@prometheus-io/client`, `prom-client` 15, or
 
 - Extracts counters grouped by `(scenario, iteration, hostname)`
 - Computes p50/p75/p90/p95/p99 percentiles from histogram buckets
-- Groups resource metrics (CPU, RAM) by browser (`dsd_tab_*` per tab, `dsd_pod_*` for the whole browser). A percentile without any sample is `NaN` (`null` once saved)
+- Groups resource metrics (CPU, RAM) by browser (`dsd_tab_*` per tab, `dsd_pod_*` for the whole browser): percentiles and exact means. A value without any sample is `NaN` (`null` once saved)
 
 ### `saveBaseline(snapshot, filePath): void`
 
@@ -173,8 +173,10 @@ Compares a current `RunSnapshot` against a `Baseline` and returns a detailed rep
 - `total_requests` — informational, never fails
 
 **Metrics compared, per browser** (`report.resources`), when both runs measured it:
-- `p95_browser_cpu_percent`, `p95_browser_ram_kb` — the whole browser (all its processes)
-- `p95_tab_cpu_percent`, `p95_tab_ram_kb` — each process rendering pages
+- `mean_browser_cpu_percent`, `mean_browser_ram_kb` — the whole browser (all its processes)
+- `mean_tab_cpu_percent`, `mean_tab_ram_kb` — each process rendering pages
+
+These are the exact means of the samples (histogram sum / count). The percentiles of the snapshot are interpolated within the buckets, as coarse as them (e.g. 100, 150, 200 % of CPU): between two runs consuming the same, a p95 can jump to the next bucket, so they are not compared.
 
 A value the baseline or the current run does not know (no sample) is not compared.
 
@@ -256,7 +258,7 @@ Default thresholds:
 |---|---|---|
 | `defaultMaxIncreasePercent` | `20` | Max allowed percentage increase for p50/p95 latency |
 | `defaultMaxErrorRateIncreasePercent` | `10` | Max allowed percentage increase for error rate (relative: 1% → 1.1% is +10%; from 0, any error fails) |
-| `defaultMaxResourceIncreasePercent` | `20` | Max allowed percentage increase for the p95 CPU and memory of each browser |
+| `defaultMaxResourceIncreasePercent` | `20` | Max allowed percentage increase for the mean CPU and memory of each browser |
 
 Custom thresholds:
 

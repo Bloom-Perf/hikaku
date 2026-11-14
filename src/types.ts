@@ -55,17 +55,22 @@ export type ScenarioMetrics = {
 };
 
 /**
- * CPU (% of one core) and memory (kB) of a browser, from Kyara's `dsd_*` histograms.
- * A percentile is `NaN` (`null` once saved) when the metric has no sample for the browser.
+ * CPU (% of one core) and memory (kB) of a browser, from Kyara's `dsd_*` histograms:
+ * `tab*` for each process rendering pages, `pod*` for the whole browser (all its processes).
+ * A value is `NaN` (`null` once saved) when the metric has no sample for the browser.
  */
 export type ResourceMetrics = {
   browser: string;
-  /** Each process rendering pages (tab) */
+  /** Percentiles interpolated within the histogram buckets: as coarse as the buckets */
   tabCpuPercentiles: PercentileValues;
   tabRamKbPercentiles: PercentileValues;
-  /** The whole browser (all its processes) */
   podCpuPercentiles: PercentileValues;
   podRamKbPercentiles: PercentileValues;
+  /** Exact means of the samples (histogram sum / count); absent from baselines saved by hikaku < 0.3 */
+  tabCpuMean: number;
+  tabRamKbMean: number;
+  podCpuMean: number;
+  podRamKbMean: number;
 };
 
 export type RunSnapshot = {
@@ -148,7 +153,7 @@ export type ComparisonThresholds = {
   defaultMaxIncreasePercent: number;
   /** Max allowed increase in percent for error rate. Default: 10 */
   defaultMaxErrorRateIncreasePercent: number;
-  /** Max allowed increase in percent for the p95 CPU and memory of the browsers. Default: 20 */
+  /** Max allowed increase in percent for the mean CPU and memory of the browsers. Default: 20 */
   defaultMaxResourceIncreasePercent: number;
   /**
    * Per-scenario overrides keyed by "scenario:iteration" (one iteration) or "scenario"

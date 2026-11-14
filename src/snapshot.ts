@@ -375,48 +375,53 @@ function buildScenarioMetrics(
 function buildResourceMetrics(
   metricsMap: Map<string, MetricData>,
 ): ResourceMetrics[] {
-  const tabCpu = metricsMap.get("dsd_tab_cpu_percent");
-  const tabRam = metricsMap.get("dsd_tab_ram_kb");
-  const podCpu = metricsMap.get("dsd_pod_cpu_percent");
-  const podRam = metricsMap.get("dsd_pod_ram_kb");
+  const names = {
+    tabCpu: "dsd_tab_cpu_percent",
+    tabRam: "dsd_tab_ram_kb",
+    podCpu: "dsd_pod_cpu_percent",
+    podRam: "dsd_pod_ram_kb",
+  } as const;
 
   // Discover all browser labels
   const browsers = new Set<string>();
-  for (const metric of [tabCpu, tabRam, podCpu, podRam]) {
-    if (!metric) continue;
-    for (const v of metric.values) {
+  for (const name of Object.values(names)) {
+    for (const v of metricsMap.get(name)?.values ?? []) {
       if (v.labels.browser !== undefined) {
         browsers.add(String(v.labels.browser));
       }
     }
   }
 
-  const zeroPercentiles: PercentileValues = {
-    p50: 0,
-    p75: 0,
-    p90: 0,
-    p95: 0,
-    p99: 0,
+  /**
+   * Percentiles (from the buckets) and exact mean (sum / count) of a histogram for one
+   * browser; NaN when it has no sample
+   */
+  const stats = (name: string, browser: string) => {
+    const values = metricsMap.get(name)?.values ?? [];
+    const { sum, count } = extractSumCount(values, name, { browser });
+    return {
+      percentiles: computePercentiles(extractBuckets(values, { browser })),
+      mean: count > 0 ? sum / count : NaN,
+    };
   };
 
   return Array.from(browsers)
     .sort()
     .map((browser) => {
-      const labels = { browser };
+      const tabCpu = stats(names.tabCpu, browser);
+      const tabRam = stats(names.tabRam, browser);
+      const podCpu = stats(names.podCpu, browser);
+      const podRam = stats(names.podRam, browser);
       return {
         browser,
-        tabCpuPercentiles: tabCpu
-          ? computePercentiles(extractBuckets(tabCpu.values, labels))
-          : zeroPercentiles,
-        tabRamKbPercentiles: tabRam
-          ? computePercentiles(extractBuckets(tabRam.values, labels))
-          : zeroPercentiles,
-        podCpuPercentiles: podCpu
-          ? computePercentiles(extractBuckets(podCpu.values, labels))
-          : zeroPercentiles,
-        podRamKbPercentiles: podRam
-          ? computePercentiles(extractBuckets(podRam.values, labels))
-          : zeroPercentiles,
+        tabCpuPercentiles: tabCpu.percentiles,
+        tabRamKbPercentiles: tabRam.percentiles,
+        podCpuPercentiles: podCpu.percentiles,
+        podRamKbPercentiles: podRam.percentiles,
+        tabCpuMean: tabCpu.mean,
+        tabRamKbMean: tabRam.mean,
+        podCpuMean: podCpu.mean,
+        podRamKbMean: podRam.mean,
       };
     });
 }

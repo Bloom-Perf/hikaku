@@ -27,7 +27,7 @@ Prometheus registry → createSnapshot() → RunSnapshot → saveBaseline() / lo
 ```
 
 - `src/snapshot.ts` - Reads a `MetricsSource` (anything with `getMetricsAsJSON()`: `@prometheus-io/client`, `prom-client` 15) and computes percentiles with the Prometheus `histogram_quantile` interpolation. It knows Kyara's metric names: `browser_request*` and `browser_request_duration_seconds` labelled `hostname`, `scenario`, `iteration`; `dsd_{tab,pod}_{cpu_percent,ram_kb}` labelled `browser`. A percentile without samples is `NaN` (`null` once saved).
-- `src/compare.ts` - Matches scenario iterations by `"scenario:iteration"` and browsers by name. Fails on latency, error rate or resource regressions, and when baseline iterations are missing; values that are not finite are not compared.
+- `src/compare.ts` - Matches scenario iterations by `"scenario:iteration"` and browsers by name. Fails on latency, error rate or resource (mean CPU/RAM) regressions, and when baseline iterations are missing; values that are not finite are not compared.
 - `src/baseline.ts` - Versioned JSON file (`version: 1`). Changing the snapshot shape in an incompatible way means a new version and a migration in `loadBaseline`.
 - `src/report.ts` - Prompt construction and `createAnthropicProvider` (dynamic import of the optional peer dependency `@anthropic-ai/sdk`, streamed request). Tests run it against a local server through `ANTHROPIC_BASE_URL`.
 - `src/types.ts` - Public types; `src/index.ts` is the only entry point (`exports` in package.json).
