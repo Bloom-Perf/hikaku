@@ -89,8 +89,49 @@ describe("baseline", () => {
     );
 
     expect(() => loadBaseline(filePath)).to.throw(
-      "Unsupported baseline version: 99",
+      `Unsupported baseline version: 99 in ${filePath}`,
     );
+  });
+
+  it("creates the directory of the baseline", () => {
+    const filePath = path.join(tmpDir, "ci", "baselines", "baseline.json");
+    saveBaseline(sampleSnapshot, filePath);
+
+    expect(loadBaseline(filePath).snapshot.scenarios).to.have.length(1);
+  });
+
+  it("names the file when it is not JSON", () => {
+    const filePath = path.join(tmpDir, "truncated.json");
+    fs.writeFileSync(filePath, '{"version": 1, "snap', "utf-8");
+
+    expect(() => loadBaseline(filePath)).to.throw(
+      `Invalid baseline ${filePath}: not JSON`,
+    );
+  });
+
+  it("rejects a JSON file that is not a baseline", () => {
+    const filePath = path.join(tmpDir, "report.json");
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({ version: 1, overallVerdict: "pass" }),
+      "utf-8",
+    );
+
+    expect(() => loadBaseline(filePath)).to.throw(
+      `Invalid baseline ${filePath}: snapshot.scenarios is missing`,
+    );
+  });
+
+  it("loads a baseline saved without resources", () => {
+    const filePath = path.join(tmpDir, "old.json");
+    const { resources: _resources, ...withoutResources } = sampleSnapshot;
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({ version: 1, createdAt: "", snapshot: withoutResources }),
+      "utf-8",
+    );
+
+    expect(loadBaseline(filePath).snapshot.resources).to.deep.equal([]);
   });
 
   it("baselineExists returns true when file exists", () => {
