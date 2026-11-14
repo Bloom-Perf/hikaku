@@ -1,5 +1,11 @@
 import { expect } from "chai";
-import { generateReport } from "../src/report.js";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
+import {
+  createAnthropicProvider,
+  DEFAULT_ANTHROPIC_MODEL,
+  generateReport,
+} from "../src/report.js";
 import type {
   ComparisonReport,
   RunSnapshot,
@@ -72,6 +78,7 @@ function makeReport(verdict: "pass" | "fail" = "fail"): ComparisonReport {
         verdict: "fail",
       },
     ],
+    resources: [],
     summary: {
       totalScenarios: 1,
       passed: 0,
@@ -83,8 +90,13 @@ function makeReport(verdict: "pass" | "fail" = "fail"): ComparisonReport {
           currentValue: 0.75,
           deltaPercent: 50,
           status: "regression",
+          scenario: "Login",
+          iteration: 0,
         },
       ],
+      missingScenarios: [],
+      newScenarios: [],
+      missingBrowsers: [],
     },
   };
 }
@@ -130,8 +142,8 @@ describe("generateReport", () => {
     await generateReport(report, current, baseline, { provider });
 
     expect(calls[0].userMessage).to.include("p95_latency");
-    expect(calls[0].userMessage).to.include('"deltaPercent": 50');
-    expect(calls[0].userMessage).to.include('"overallVerdict": "fail"');
+    expect(calls[0].userMessage).to.include('"deltaPercent":50');
+    expect(calls[0].userMessage).to.include('"overallVerdict":"fail"');
   });
 
   it("includes current and baseline snapshots in user message", async () => {
@@ -223,7 +235,16 @@ describe("generateReport", () => {
       timestamp: "2026-03-08T12:05:00.000Z",
       overallVerdict: "pass",
       scenarios: [],
-      summary: { totalScenarios: 0, passed: 0, failed: 0, regressions: [] },
+      resources: [],
+      summary: {
+        totalScenarios: 0,
+        passed: 0,
+        failed: 0,
+        regressions: [],
+        missingScenarios: [],
+        newScenarios: [],
+        missingBrowsers: [],
+      },
     };
     const current = makeSnapshot([]);
     const baseline = makeBaseline([]);
@@ -234,5 +255,186 @@ describe("generateReport", () => {
 
     expect(result).to.equal("Mock report output");
     expect(calls).to.have.length(1);
+  });
+});
+
+describe("generateReport input", () => {
+  it("keeps infinite deltas (baseline value 0) in the JSON", async () => {
+    const { provider, calls } = createMockProvider();
+    const report = makeReport();
+    report.scenarios[0].deltas[1] = {
+      metricName: "error_rate",
+      baselineValue: 0,
+      currentValue: 0.05,
+      deltaPercent: Infinity,
+      status: "regression",
+    };
+
+    await generateReport(
+      report,
+      makeSnapshot([makeScenario()]),
+      makeBaseline([makeScenario()]),
+      { provider },
+    );
+
+    expect(calls[0].userMessage).to.include('"deltaPercent":"Infinity"');
+    expect(calls[0].systemPrompt).to.include("Infinity");
+  });
+
+  it("explains the resource metrics and the missing scenarios", async () => {
+    const { provider, calls } = createMockProvider();
+
+    await generateReport(
+      makeReport(),
+      makeSnapshot([makeScenario()]),
+      makeBaseline([makeScenario()]),
+      { provider },
+    );
+
+    expect(calls[0].systemPrompt).to.include("% of one core");
+    expect(calls[0].systemPrompt).to.include("missing from the current run");
+  });
+});
+
+/** Answers the Messages API with a stream (server-sent events) */
+function sseBody(text: string, stopReason: string): string {
+  const events: Array<[string, unknown]> = [
+    [
+      "message_start",
+      {
+        type: "message_start",
+        message: {
+          id: "msg_test",
+          type: "message",
+          role: "assistant",
+          model: DEFAULT_ANTHROPIC_MODEL,
+          content: [],
+          stop_reason: null,
+          stop_sequence: null,
+          usage: { input_tokens: 10, output_tokens: 1 },
+        },
+      },
+    ],
+    [
+      "content_block_start",
+      {
+        type: "content_block_start",
+        index: 0,
+        content_block: { type: "text", text: "" },
+      },
+    ],
+    [
+      "content_block_delta",
+      {
+        type: "content_block_delta",
+        index: 0,
+        delta: { type: "text_delta", text },
+      },
+    ],
+    ["content_block_stop", { type: "content_block_stop", index: 0 }],
+    [
+      "message_delta",
+      {
+        type: "message_delta",
+        delta: { stop_reason: stopReason, stop_sequence: null },
+        usage: { output_tokens: 5 },
+      },
+    ],
+    ["message_stop", { type: "message_stop" }],
+  ];
+  return events
+    .map(
+      ([event, data]) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`,
+    )
+    .join("");
+}
+
+describe("createAnthropicProvider", () => {
+  let server: Server;
+  let requests: Array<Record<string, unknown>>;
+  let reply: { text: string; stopReason: string };
+  const previousBaseUrl = process.env.ANTHROPIC_BASE_URL;
+
+  before(async () => {
+    server = createServer((req, res) => {
+      let body = "";
+      req.on("data", (chunk) => (body += chunk));
+      req.on("end", () => {
+        requests.push(JSON.parse(body));
+        res.writeHead(200, { "content-type": "text/event-stream" });
+        res.end(sseBody(reply.text, reply.stopReason));
+      });
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    const { port } = server.address() as AddressInfo;
+    process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${port}`;
+  });
+
+  after(async () => {
+    if (previousBaseUrl === undefined) delete process.env.ANTHROPIC_BASE_URL;
+    else process.env.ANTHROPIC_BASE_URL = previousBaseUrl;
+    await new Promise((resolve) => server.close(resolve));
+  });
+
+  beforeEach(() => {
+    requests = [];
+    reply = { text: "## Report", stopReason: "end_turn" };
+  });
+
+  it("streams a message from the default model and returns its text", async () => {
+    const provider = createAnthropicProvider("test-key");
+
+    const text = await provider.complete("system prompt", "user message");
+
+    expect(text).to.equal("## Report");
+    expect(requests).to.have.length(1);
+    expect(requests[0]).to.include({
+      model: "claude-sonnet-5-5",
+      max_tokens: 16000,
+      stream: true,
+      system: "system prompt",
+    });
+    expect(requests[0].messages).to.deep.equal([
+      { role: "user", content: "user message" },
+    ]);
+  });
+
+  it("uses the given model", async () => {
+    await createAnthropicProvider("test-key", "claude-opus-5-5").complete(
+      "s",
+      "u",
+    );
+
+    expect(requests[0].model).to.equal("claude-opus-5-5");
+  });
+
+  it("rejects when the model declines", async () => {
+    reply = { text: "", stopReason: "refusal" };
+
+    let error: unknown;
+    try {
+      await createAnthropicProvider("test-key").complete("s", "u");
+    } catch (e) {
+      error = e;
+    }
+
+    expect(String(error)).to.include("declined to write the report");
+  });
+
+  it("rejects when the model returns no text", async () => {
+    reply = { text: "  ", stopReason: "max_tokens" };
+
+    let error: unknown;
+    try {
+      await createAnthropicProvider("test-key").complete("s", "u");
+    } catch (e) {
+      error = e;
+    }
+
+    expect(String(error)).to.include(
+      "returned no report (stop reason: max_tokens)",
+    );
   });
 });

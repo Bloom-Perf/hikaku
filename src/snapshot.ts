@@ -1,5 +1,7 @@
-import type { Registry } from "prom-client";
 import type {
+  MetricFamily,
+  MetricSample,
+  MetricsSource,
   RunSnapshot,
   ScenarioMetrics,
   HostMetrics,
@@ -10,15 +12,18 @@ import type {
 // ============ Public API ============
 
 /**
- * Create a structured RunSnapshot from a prom-client Registry.
- * Extracts Kyara-specific metrics and computes percentiles from histograms.
+ * Create a structured RunSnapshot from a Prometheus registry (`@prometheus-io/client`,
+ * or `prom-client`, its former name). Extracts Kyara's metrics and computes percentiles
+ * from histograms.
  */
-export async function createSnapshot(registry: Registry): Promise<RunSnapshot> {
+export async function createSnapshot(
+  registry: MetricsSource,
+): Promise<RunSnapshot> {
   const metricsJson = await registry.getMetricsAsJSON();
   const metricsMap = new Map<string, MetricData>();
 
   for (const metric of metricsJson) {
-    metricsMap.set(metric.name, metric as unknown as MetricData);
+    metricsMap.set(metric.name, metric);
   }
 
   return {
@@ -74,19 +79,9 @@ export function histogramQuantile(
 
 // ============ Internal types ============
 
-type MetricValue = {
-  value: number;
-  metricName?: string;
-  labels: Record<string, string | number>;
-};
+type MetricValue = MetricSample;
 
-type MetricData = {
-  name: string;
-  help: string;
-  type: string;
-  values: MetricValue[];
-  aggregator: string;
-};
+type MetricData = MetricFamily;
 
 // ============ Internal functions ============
 

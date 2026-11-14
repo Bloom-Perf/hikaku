@@ -1,5 +1,8 @@
 // Types
 export type {
+  MetricSample,
+  MetricFamily,
+  MetricsSource,
   PercentileValues,
   HostMetrics,
   ScenarioMetrics,
@@ -8,7 +11,10 @@ export type {
   Baseline,
   MetricStatus,
   MetricDelta,
+  Regression,
   ScenarioComparison,
+  ResourceComparison,
+  ScenarioKey,
   ComparisonReport,
   ComparisonThresholds,
   LlmProvider,
@@ -27,4 +33,8 @@ export { saveBaseline, loadBaseline, baselineExists } from "./baseline.js";
 export { compare } from "./compare.js";
 
 // Report
-export { generateReport, createAnthropicProvider } from "./report.js";
+export {
+  generateReport,
+  createAnthropicProvider,
+  DEFAULT_ANTHROPIC_MODEL,
+} from "./report.js";

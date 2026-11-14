@@ -1,6 +1,7 @@
 import { expect } from "chai";
-import prom from "prom-client";
+import prom from "@prometheus-io/client";
 import { histogramQuantile, createSnapshot } from "../src/snapshot.js";
+import type { MetricsSource } from "../src/types.js";
 
 describe("histogramQuantile", () => {
   it("returns NaN for empty buckets", () => {
@@ -265,6 +266,117 @@ describe("createSnapshot", () => {
 
     expect(snapshot.resources).to.have.length(1);
     expect(snapshot.resources[0].browser).to.equal("firefox");
+  });
+
+  it("reads Kyara's metrics: default labels, labelled histograms, both browsers", async () => {
+    // As Kyara 2 registers them (src/metrics.ts), with its default "app" label
+    registry.setDefaultLabels({ app: "kyara" });
+    const labelNames = ["hostname", "scenario", "iteration"];
+    const request = new prom.Counter({
+      name: "browser_request",
+      help: "requests",
+      labelNames,
+      registers: [registry],
+    });
+    const failed = new prom.Counter({
+      name: "browser_request_failed",
+      help: "failed",
+      labelNames,
+      registers: [registry],
+    });
+    const duration = new prom.Histogram({
+      name: "browser_request_duration_seconds",
+      help: "duration",
+      labelNames,
+      buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+      registers: [registry],
+    });
+    new prom.Counter({
+      name: "browser_tab_started",
+      help: "tabs",
+      labelNames: ["status", "scenario", "iteration"],
+      registers: [registry],
+    }).inc({ status: "success", scenario: "Offline", iteration: 0 });
+    const resource = (name: string, buckets: number[]) =>
+      new prom.Histogram({
+        name,
+        help: name,
+        labelNames: ["browser"],
+        buckets,
+        registers: [registry],
+      });
+    const cpu = [1, 2.5, 5, 10, 25, 50, 75, 100, 150, 200, 300, 400, 800];
+    const ram = prom.exponentialBuckets(16 * 1024, 2, 10);
+    const podCpu = resource("dsd_pod_cpu_percent", cpu);
+    const podRam = resource("dsd_pod_ram_kb", ram);
+    const tabCpu = resource("dsd_tab_cpu_percent", cpu);
+
+    const labels = { hostname: "example.com", scenario: "Login", iteration: 1 };
+    request.inc(labels, 4);
+    failed.inc(labels, 1);
+    for (const d of [0.03, 0.04, 0.2, 0.3]) duration.observe(labels, d);
+    for (const browser of ["firefox", "chrome"]) {
+      podCpu.observe({ browser }, 120);
+      podRam.observe({ browser }, 900_000);
+    }
+    tabCpu.observe({ browser: "firefox" }, 60);
+
+    const snapshot = await createSnapshot(registry);
+
+    expect(
+      snapshot.scenarios.map((s) => [s.scenario, s.iteration]),
+    ).to.deep.equal([
+      ["Login", 1],
+      // A scenario without any request (e.g. a data: URL) is still part of the run
+      ["Offline", 0],
+    ]);
+    const login = snapshot.scenarios[0];
+    expect(login.totalRequests).to.equal(4);
+    expect(login.errorRate).to.equal(0.25);
+    expect(login.hosts[0].durationCount).to.equal(4);
+    expect(login.aggregatedDurationPercentiles.p50).to.be.closeTo(0.05, 1e-9);
+
+    expect(snapshot.resources.map((r) => r.browser)).to.deep.equal([
+      "chrome",
+      "firefox",
+    ]);
+    const [chrome, firefox] = snapshot.resources;
+    expect(firefox.podCpuPercentiles.p95).to.be.within(100, 150);
+    expect(firefox.podRamKbPercentiles.p50).to.be.within(
+      512 * 1024,
+      1024 * 1024,
+    );
+    expect(firefox.tabCpuPercentiles.p95).to.be.within(50, 75);
+    // No tab sample for Chrome: unknown, not 0
+    expect(chrome.tabCpuPercentiles.p95).to.be.NaN;
+  });
+
+  it("accepts any source of metrics, with labels as strings", async () => {
+    const source: MetricsSource = {
+      async getMetricsAsJSON() {
+        return [
+          {
+            name: "browser_request",
+            values: [
+              {
+                value: 3,
+                labels: {
+                  hostname: "a.com",
+                  scenario: "Login",
+                  iteration: "2",
+                },
+              },
+            ],
+          },
+        ];
+      },
+    };
+
+    const snapshot = await createSnapshot(source);
+
+    expect(snapshot.scenarios).to.have.length(1);
+    expect(snapshot.scenarios[0].iteration).to.equal(2);
+    expect(snapshot.scenarios[0].totalRequests).to.equal(3);
   });
 
   it("returns empty arrays when no metrics are registered", async () => {
