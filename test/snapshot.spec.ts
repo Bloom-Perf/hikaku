@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import prom from "prom-client";
-import { histogramQuantile, createSnapshot } from "../src/snapshot";
+import { histogramQuantile, createSnapshot } from "../src/snapshot.js";
 
 describe("histogramQuantile", () => {
   it("returns NaN for empty buckets", () => {

@@ -1,6 +1,6 @@
 import { expect } from "chai";
-import { compare } from "../src/compare";
-import type { RunSnapshot, Baseline, ScenarioMetrics } from "../src/types";
+import { compare } from "../src/compare.js";
+import type { RunSnapshot, Baseline, ScenarioMetrics } from "../src/types.js";
 
 function makeScenario(
   overrides: Partial<ScenarioMetrics> = {},

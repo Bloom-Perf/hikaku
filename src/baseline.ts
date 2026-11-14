@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import type { Baseline, RunSnapshot } from "./types";
+import type { Baseline, RunSnapshot } from "./types.js";
 
 /**
  * Save a RunSnapshot as a baseline JSON file.

@@ -7,8 +7,8 @@ import type {
   MetricDelta,
   MetricStatus,
   ScenarioMetrics,
-} from "./types";
-import { DEFAULT_THRESHOLDS } from "./types";
+} from "./types.js";
+import { DEFAULT_THRESHOLDS } from "./types.js";
 
 /**
  * Compare a current RunSnapshot against a Baseline.
